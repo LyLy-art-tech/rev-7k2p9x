@@ -1,0 +1,11 @@
+{
+  "name": "Mes révisions",
+  "short_name": "Révisions",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#efe4d3",
+  "theme_color": "#efe4d3",
+  "icons": [
+    { "src": "icone.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
