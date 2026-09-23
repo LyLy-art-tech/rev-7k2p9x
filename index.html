@@ -699,7 +699,19 @@ gate(async () => {
   DATA = await loadData();
   render();
 });
-if('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+if('serviceWorker' in navigator) addEventListener('load', async () => {
+  try{
+    const reg = await navigator.serviceWorker.register('sw.js');
+    reg.update();
+    /* une nouvelle version déposée sur GitHub remplace l'ancienne au prochain lancement */
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w && w.addEventListener('statechange', () => {
+        if(w.state === 'installed' && navigator.serviceWorker.controller) $('#foot').textContent = 'Nouvelle version disponible — ferme et rouvre l\'app.';
+      });
+    });
+  }catch(e){}
+});
 
 </script>
 </body>
