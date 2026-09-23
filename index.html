@@ -77,6 +77,11 @@ header.top p{color:var(--muted);margin:6px 0 0;font-size:14px}
 #study{position:fixed;inset:0;z-index:40}
 #study[hidden]{display:none!important}
 @media (max-width:520px){ .deck .nm b{font-size:18px} }
+.themes{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:22px 0 0}
+.sw{width:42px;height:42px;border-radius:13px;border:2px solid transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);position:relative;overflow:hidden}
+.sw i{position:absolute;left:24%;right:24%;top:28%;bottom:0;border-radius:5px 5px 0 0}
+.sw.on{border-color:var(--accent);transform:scale(1.06)}
+.themes .lab{width:100%;text-align:center;color:var(--muted);font-size:11px;letter-spacing:.09em;text-transform:uppercase;font-weight:800;margin-bottom:2px}
 
 /* ===== Révisions (utilisé dans Carnet et dans le fichier « Révisions … ») ===== */
 .st-wrap{position:fixed;inset:0;z-index:95;display:flex;flex-direction:column;font-family:var(--font-body,system-ui);color:var(--ink,#333);background-color:var(--bg-base,#eee);background-image:var(--bg-art,none)}
@@ -236,6 +241,7 @@ header.top p{color:var(--muted);margin:6px 0 0;font-size:14px}
     <button class="btn" id="btn-export">Exporter (.json)</button>
     <button class="btn" id="btn-reset">Effacer ma progression</button>
   </div>
+  <div class="themes" id="themes"></div>
   <p class="note" id="foot"></p>
   <input type="file" id="file" accept=".json,application/json" hidden>
 </main>
@@ -640,7 +646,55 @@ $('#btn-reset').onclick = () => {
   else { $('#btn-reset').dataset.sure = '1'; $('#btn-reset').textContent = 'Confirmer l\'effacement'; setTimeout(() => { const b = $('#btn-reset'); if(b.dataset.sure){ delete b.dataset.sure; b.textContent = 'Effacer ma progression'; } }, 4000); }
 };
 
+/* ---- Thèmes (les mêmes que dans Carnet) ---- */
+const THEMES = {
+  auto:      { label:'Appareil' },
+  parchemin: { label:'Parchemin', base:'#efe4d3', sheet:'#fffcf6', ink:'#3a2e27', muted:'#8a7a6d', accent:'#b0643c', soft:'#f6e6d8', rule:'#eadfce',
+    art:'radial-gradient(circle at 12% 18%, #f7d8c4 0, transparent 38%), radial-gradient(circle at 88% 78%, #e2cfae 0, transparent 42%), radial-gradient(circle at 75% 8%, #f5ead3 0, transparent 34%)' },
+  lavande:   { label:'Lavande', base:'#e7e1f7', sheet:'#fdfcff', ink:'#2f2a45', muted:'#8580a0', accent:'#7a5cc7', soft:'#ece5fb', rule:'#e6e0f2',
+    art:'radial-gradient(circle at 15% 22%, #f6dcef 0, transparent 40%), radial-gradient(circle at 85% 70%, #d3d9fb 0, transparent 44%), radial-gradient(circle at 60% 0%, #efe9ff 0, transparent 35%)' },
+  sauge:     { label:'Sauge', base:'#e1eadc', sheet:'#fcfdfa', ink:'#26352b', muted:'#7a8a7e', accent:'#4f8a60', soft:'#e2efe2', rule:'#dfe8dc',
+    art:'radial-gradient(circle at 10% 15%, #f3eed6 0, transparent 38%), radial-gradient(circle at 90% 80%, #c9dfca 0, transparent 44%), radial-gradient(circle at 70% 10%, #e8f1e0 0, transparent 34%)' },
+  ocean:     { label:'Océan', base:'#d9e8f3', sheet:'#fbfdff', ink:'#1f3242', muted:'#74879a', accent:'#3474aa', soft:'#dfecf8', rule:'#dde7f0',
+    art:'radial-gradient(circle at 12% 20%, #e1f3f1 0, transparent 40%), radial-gradient(circle at 88% 78%, #c7d9f2 0, transparent 44%), radial-gradient(circle at 60% 5%, #eef6fc 0, transparent 34%)' },
+  peche:     { label:'Pêche', base:'#fbe3d8', sheet:'#fffaf7', ink:'#45302a', muted:'#9a7d73', accent:'#d06a4c', soft:'#fde6dc', rule:'#f3e0d7',
+    art:'radial-gradient(circle at 15% 20%, #ffd6dd 0, transparent 40%), radial-gradient(circle at 85% 75%, #fde4c4 0, transparent 44%), radial-gradient(circle at 65% 5%, #fff0e8 0, transparent 34%)' },
+  menthe:    { label:'Menthe', base:'#dcf1ec', sheet:'#fbfffd', ink:'#1f3a36', muted:'#71918b', accent:'#2f9384', soft:'#dcf2ed', rule:'#d9ece7',
+    art:'radial-gradient(circle at 12% 20%, #fdf4d4 0, transparent 38%), radial-gradient(circle at 88% 78%, #c6ebe2 0, transparent 44%), radial-gradient(circle at 60% 5%, #e9f9f5 0, transparent 34%)' },
+  papier:    { label:'Papier', base:'#f1f0ec', sheet:'#ffffff', ink:'#232323', muted:'#8a8a86', accent:'#3f3f3f', soft:'#ededea', rule:'#e8e7e3',
+    art:'radial-gradient(circle at 20% 20%, #f7f6f2 0, transparent 45%)' },
+  nuit:      { label:'Nuit', base:'#141729', sheet:'#1e2134', ink:'#e7e4f2', muted:'#9a96b3', accent:'#b3a1ff', soft:'#2d2b4d', rule:'#2c2f45', dark:true,
+    art:'radial-gradient(circle at 15% 20%, #2c2f63 0, transparent 40%), radial-gradient(circle at 85% 80%, #3a2550 0, transparent 44%), radial-gradient(circle at 60% 0%, #1f3050 0, transparent 38%)' },
+};
+function applyTheme(key){
+  const r = document.documentElement, t = THEMES[key];
+  ['--bg-base','--bg-art','--sheet','--ink','--muted','--accent','--accent-soft','--rule'].forEach(v => r.style.removeProperty(v));
+  r.removeAttribute('data-theme');
+  if(t && key !== 'auto'){
+    r.style.setProperty('--bg-base', t.base); r.style.setProperty('--bg-art', t.art);
+    r.style.setProperty('--sheet', t.sheet); r.style.setProperty('--ink', t.ink);
+    r.style.setProperty('--muted', t.muted); r.style.setProperty('--accent', t.accent);
+    r.style.setProperty('--accent-soft', t.soft); r.style.setProperty('--rule', t.rule);
+    r.setAttribute('data-theme', t.dark ? 'dark' : 'light');
+    const meta = document.querySelector('meta[name="theme-color"]'); if(meta) meta.content = t.base;
+  }
+  store.set('rev:theme', key);
+  const box = $('#themes');
+  if(box) box.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', b.dataset.theme === key));
+}
+function renderThemes(){
+  const cur = store.get('rev:theme', 'auto');
+  $('#themes').innerHTML = '<span class="lab">Thème</span>' + Object.entries(THEMES).map(([k, t]) =>
+    k === 'auto'
+      ? '<button class="sw' + (cur === k ? ' on' : '') + '" data-theme="auto" title="Selon l\'appareil" style="background:linear-gradient(135deg,#fffcf6 50%,#1e2134 50%)"></button>'
+      : '<button class="sw' + (cur === k ? ' on' : '') + '" data-theme="' + k + '" title="' + t.label + '" style="background:' + t.base + ';background-image:' + t.art + '"><i style="background:' + t.sheet + '"></i></button>'
+  ).join('');
+  applyTheme(cur);
+}
+$('#themes').addEventListener('click', e => { const b = e.target.closest('[data-theme]'); if(b) applyTheme(b.dataset.theme); });
+
 /* ---- Démarrage ---- */
+renderThemes();
 gate(async () => {
   DATA = await loadData();
   render();

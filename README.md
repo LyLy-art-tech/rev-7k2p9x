@@ -39,6 +39,12 @@ Mets le code que tu veux, ou `''` pour l'enlever.
 C'est une dissuasion, pas une sécurité : quelqu'un qui connaît l'adresse peut toujours
 ouvrir `data/cartes.json` directement. Pour une vraie confidentialité, n'utilise que l'import.
 
+## Thème
+
+Le bouton en bas de l'écran d'accueil change les couleurs : les mêmes thèmes que dans Carnet
+(Parchemin, Lavande, Sauge, Océan, Pêche, Menthe, Papier, Nuit), plus « Appareil » qui suit
+le mode clair/sombre du téléphone. Le choix est retenu sur l'appareil.
+
 ## Vie privée
 
 - `robots.txt` et la balise `noindex` demandent aux moteurs de recherche d'ignorer le site.
