@@ -106,7 +106,18 @@ header.top p{color:var(--muted);margin:6px 0 0;font-size:14px}
 .st-bar i{display:block;height:100%;background:var(--accent,#888);border-radius:5px;transition:width .35s}
 .st-meta{display:flex;justify-content:space-between;font-size:12.5px;opacity:.7;margin-bottom:18px}
 .st-meta b{font-variant-numeric:tabular-nums}
-.st-card{perspective:1600px;margin:0 auto;width:100%;max-width:560px;cursor:pointer}
+.st-card{perspective:1600px;margin:0 auto;width:100%;max-width:560px;cursor:pointer;transition:transform .3s cubic-bezier(.4,0,.6,1), opacity .3s}
+.st-card.fly-right{transform:translateX(60%) rotate(9deg);opacity:0}
+.st-card.fly-left{transform:translateX(-60%) rotate(-9deg);opacity:0}
+.st-card.enter{animation:st-in .32s cubic-bezier(.2,.8,.2,1)}
+@keyframes st-in{from{opacity:0;transform:translateY(22px) scale(.97)}}
+.st-back-btn{min-width:38px;padding:9px 12px}
+.st-back-btn[disabled]{opacity:.35;cursor:default}
+@media (prefers-reduced-motion: reduce){
+  .st-card{transition:none}
+  .st-card.enter{animation:none}
+  .st-card.fly-right,.st-card.fly-left{opacity:0;transform:none}
+}
 .st-inner3d{position:relative;transform-style:preserve-3d;transition:transform .5s cubic-bezier(.3,.9,.3,1);min-height:230px}
 .st-card.flip .st-inner3d{transform:rotateY(180deg)}
 .st-face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;display:grid;place-items:center;text-align:center;padding:34px 30px;border-radius:22px;
@@ -294,7 +305,7 @@ function studyEngine(root, cards, opts){
   function htmlA(c){ return c.ah || E(c.a); }
   function frontH(c){ return S.dir==='qa' ? htmlQ(c) : htmlA(c); }
   function backH(c){ return S.dir==='qa' ? htmlA(c) : htmlQ(c); }
-  function startDeck(list){ S.queue = shuffle(list||pool()); S.i=0; S.ok=0; S.ko=0; S.missed=[]; }
+  function startDeck(list){ S.queue = shuffle(list||pool()); S.i=0; S.ok=0; S.ko=0; S.missed=[]; S.hist=[]; S.anim=null; }
   function startGame(){
     S.level = S.level || 1;
     S.ev = sorted.map(function(c,i){ return S.level===2 ? null : i; });
@@ -331,10 +342,25 @@ function studyEngine(root, cards, opts){
       setSeg(seg,v); return render(); }
     if(b.matches('[data-act="flip"]') || b.matches('.st-card')){ var c=root.querySelector('.st-card'); if(c) c.classList.toggle('flip'); return; }
     if(b.matches('[data-act="ok"]') || b.matches('[data-act="ko"]')){
+      if(S.busy) return;
       var card=S.queue[S.i], good=b.getAttribute('data-act')==='ok';
       if(good) S.ok++; else { S.ko++; S.missed.push(card); }
       if(opts.onResult) opts.onResult(card, good);
-      S.i++; return render();
+      S.hist.push(good);
+      var el=root.querySelector('.st-card'), reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+      S.i++;
+      if(el && !reduce){
+        S.busy=true; el.classList.add(good ? 'fly-right' : 'fly-left');
+        setTimeout(function(){ S.busy=false; S.anim='enter'; render(); }, 300);
+      } else { S.anim='enter'; render(); }
+      return;
+    }
+    if(b.matches('[data-act="back"]')){
+      if(!S.hist.length || S.busy) return;
+      var wasGood=S.hist.pop(); S.i--;
+      if(wasGood) S.ok--; else { S.ko--; var m=S.missed.lastIndexOf(S.queue[S.i]); if(m>=0) S.missed.splice(m,1); }
+      if(opts.onUndo) opts.onUndo(S.queue[S.i], wasGood);
+      S.anim='enter'; return render();
     }
     if(b.matches('[data-act="again"]')){ startDeck(S.missed.slice()); return render(); }
     if(b.matches('[data-act="restart"]')){ startDeck(); return render(); }
@@ -374,7 +400,13 @@ function studyEngine(root, cards, opts){
     if(b.matches('[data-act="wnext"]')){
       var ok=b.getAttribute('data-ok')==='1'; if(ok) S.wok++; else S.wko++;
       if(opts.onResult) opts.onResult(forms[S.wi], ok);
+      S.wHist=S.wHist||[]; S.wHist[S.wi]=S.wAns; S.wLast=S.wLast||[]; S.wLast[S.wi]=ok;
       S.wi++; S.wAns=''; S.wPhase='input'; return render(); }
+    if(b.matches('[data-act="wback"]')){
+      if(!S.wi) return;
+      S.wi--; S.wPhase='input'; S.wAns=(S.wHist&&S.wHist[S.wi])||'';
+      var last=S.wLast&&S.wLast[S.wi]; if(last!==undefined){ if(last) S.wok--; else S.wko--; S.wLast[S.wi]=undefined; }
+      return render(); }
     if(b.matches('[data-act="wrestart"]')){ S.wi=0; S.wok=0; S.wko=0; S.wAns=''; S.wPhase='input'; return render(); }
   });
 
@@ -393,7 +425,8 @@ function studyEngine(root, cards, opts){
         +'<h3>'+(pct>=80?'Bravo !':(pct>=50?'Pas mal !':'À retravailler'))+'</h3>'
         +'<p>'+S.ok+' sur '+tot+' cartes sues</p>'
         +(S.missed.length ? '<div class="st-missed">'+S.missed.map(function(c){ return '<div><b>'+E(c.q)+'</b><span>'+E(c.a)+'</span></div>'; }).join('')+'</div>' : '')
-        +'<div class="st-actions">'+(S.missed.length?'<button class="st-btn primary" data-act="again">Revoir les '+S.missed.length+' ratées</button>':'')
+        +'<div class="st-actions">'+(S.hist.length?'<button class="st-btn st-back-btn" data-act="back" title="Revenir à la dernière carte">↩</button>':'')
+        +(S.missed.length?'<button class="st-btn primary" data-act="again">Revoir les '+S.missed.length+' ratées</button>':'')
         +'<button class="st-btn" data-act="restart">Tout recommencer</button></div></div>';
       var fg=body.querySelector('.fg');
       if(fg){ var c2=2*Math.PI*78; setTimeout(function(){ fg.style.strokeDashoffset = (c2*(1-pct/100)).toFixed(1); }, 60); }
@@ -402,11 +435,13 @@ function studyEngine(root, cards, opts){
     var card=S.queue[S.i], pr=Math.round(S.i/S.queue.length*100);
     body.innerHTML='<div class="st-bar"><i style="width:'+pr+'%"></i></div>'
       +'<div class="st-meta"><span><b>'+(S.i+1)+'</b> / '+S.queue.length+'</span><span>✓ '+S.ok+' &nbsp; ✗ '+S.ko+'</span></div>'
-      +'<div class="st-card"><div class="st-inner3d">'
+      +'<div class="st-card'+(S.anim==='enter'?' enter':'')+'"><div class="st-inner3d">'
       +'<div class="st-face"><span class="st-lab">'+labF(card)+'</span><span class="st-txt">'+frontH(card)+'</span></div>'
       +'<div class="st-face st-back"><span class="st-lab">'+labB(card)+'</span><span class="st-txt">'+backH(card)+'</span></div>'
       +'</div></div><p class="st-hint">Clique sur la carte (ou Espace) pour la retourner · ← à revoir · → je savais</p>'
-      +'<div class="st-actions"><button class="st-btn ko" data-act="ko">À revoir</button><button class="st-btn ok" data-act="ok">Je savais</button></div>';
+      +'<div class="st-actions"><button class="st-btn st-back-btn" data-act="back" title="Carte précédente"'+(S.hist.length?'':' disabled')+'>↩</button>'
+      +'<button class="st-btn ko" data-act="ko">À revoir</button><button class="st-btn ok" data-act="ok">Je savais</button></div>';
+    S.anim=null;
   }
   function renderLine(){
     if(!sorted.length){ body.innerHTML='<div class="st-empty">La frise n\'affiche que les cartes qui ont une date.<br>Tes cartes définition et formule se révisent en <b>Paquet</b>.</div>'; return; }
@@ -473,7 +508,8 @@ function studyEngine(root, cards, opts){
       h+='<textarea class="st-input" id="st-ans" placeholder="Écris la formule… ex : Ec = 1/2 m v^2" spellcheck="false">'+E(S.wAns)+'</textarea>'
        + (opts.renderTeX ? '<div class="st-prev">'+(S.wAns.trim()?prev:'<span style="font-size:13px;opacity:.6">Ton aperçu apparaîtra ici</span>')+'</div>' : '')
        + '<p class="st-tip"><b>/</b> fait une fraction (<code>1/2</code>), <b>^</b> une puissance (<code>v^2</code>), <b>_</b> un indice (<code>E_c</code>).<br>Si la formule a plusieurs <b>=</b>, une seule partie suffit. Entrée pour valider.</p>'
-       + '<div class="st-actions"><button class="st-btn" data-act="wskip">Je ne sais pas</button><button class="st-btn primary" data-act="wcheck">Vérifier</button></div>';
+       + '<div class="st-actions"><button class="st-btn st-back-btn" data-act="wback" title="Formule précédente"'+(S.wi?'':' disabled')+'>↩</button>'
+       + '<button class="st-btn" data-act="wskip">Je ne sais pas</button><button class="st-btn primary" data-act="wcheck">Vérifier</button></div>';
     } else {
       var same = sameTeX(toTeX(S.wAns), c.tex||c.a);
       h+='<div class="st-cmp">'
@@ -494,11 +530,13 @@ function studyEngine(root, cards, opts){
   function render(){ body.parentNode.setAttribute('data-mode', S.mode); if(S.mode==='deck') renderDeck(); else if(S.mode==='line') renderLine(); else if(S.mode==='write') renderWrite(); else renderGame(); }
   function keys(e){
     if(!root.querySelector('.st-wrap')){ document.removeEventListener('keydown', keys); return; }
-    if(S.mode!=='deck' || S.i>=S.queue.length) return;
+    if(S.mode!=='deck') return;
+    if(S.i>=S.queue.length){ if(e.key==='Backspace'||e.key==='ArrowUp'){ e.preventDefault(); var bk=root.querySelector('[data-act="back"]'); bk&&bk.click(); } return; }
     var card=root.querySelector('.st-card');
     if(e.key===' '||e.key==='Spacebar'){ e.preventDefault(); if(card) card.classList.toggle('flip'); }
     else if(e.key==='ArrowRight'){ e.preventDefault(); var okb=root.querySelector('[data-act="ok"]'); okb&&okb.click(); }
     else if(e.key==='ArrowLeft'){ e.preventDefault(); var kob=root.querySelector('[data-act="ko"]'); kob&&kob.click(); }
+    else if(e.key==='Backspace' || e.key==='ArrowUp'){ e.preventDefault(); var bb=root.querySelector('[data-act="back"]'); bb&&bb.click(); }
   }
   document.addEventListener('keydown', keys);
   render();
