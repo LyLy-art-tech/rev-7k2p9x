@@ -1,7 +1,7 @@
 /* Réseau d'abord, cache en secours : le site se met à jour tout seul,
    et continue de fonctionner hors connexion. */
-const CACHE = 'revisions-v2';
-const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icone.png'];
+const CACHE = 'revisions-v3';
+const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icone.png', 'icone-180.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
